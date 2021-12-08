@@ -5,7 +5,7 @@ gui.py to use via GUI
 import tkinter as tk
 
 
-class GUI:
+class Window:
 
     def __init__(self, window):
 
@@ -31,15 +31,6 @@ class GUI:
 
     def handle_click(self):
         pass
-
-
-
-if __name__ == '__main__':
-
-    root = tk.Tk()
-    GUI(root)
-    root.mainloop()
-
 
 
 
