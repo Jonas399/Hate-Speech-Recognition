@@ -1,30 +1,55 @@
 """
-main.py to test via console
+main.py
 
 """
 
-from gui import GUI
-from utils.models import Conversation
-
+import os
+import sys
 import tkinter as tk
 
+from gui import GUI
+from utils.bot import Bot
+from utils.models import Conversation
+from utils.preprocessing import prepare_model_data
+from classifiers.jonasnet import JonasNetClassifier
 
 if __name__ == '__main__':
 
-    conv_1 = Conversation(1, 'conv_1')
-    conv_1.add_message('Hello my friend.', 'bot')
+    sys_argv = sys.argv[1:]
 
-    conv_2 = Conversation(2, 'conv_2')
-    conv_2.add_message('Hello traveler.', 'bot')
+    build = True if 'build' in sys_argv  else False
 
-    # do some starting stuff
-    active_conversation = None
-    conversations = [conv_1, conv_2]
+    if 'install' in sys_argv:
+        import nltk
+        nltk.download('stopwords')
+        print('Successfully installed.')
+    elif build:
+        # init model
+        os_dir = os.path.abspath(os.curdir)
+        data_dir = os_dir + '/data/labeled_data.csv'
+        x_train, x_val, y_train, y_val = prepare_model_data(data_dir)
 
-    print(conversations)
+        model = JonasNetClassifier(os_dir, x_train, x_val, y_train, y_val, build=build)
+    else:
+        # init conversations
+        conv_1 = Conversation(1, 'conversation 1')
 
-    # init Frame
-    root = tk.Tk()
-    frame = GUI(root, active_conversation, conversations)
+        # init model
+        os_dir = os.path.abspath(os.curdir)
+        data_dir = os_dir + '/data/labeled_data.csv'
+        x_train, x_val, y_train, y_val = prepare_model_data(data_dir)
 
-    root.mainloop()
+        model = JonasNetClassifier(os_dir, x_train, x_val, y_train, y_val, build=build)
+
+        # do some starting stuff
+        active_conversation = None
+        conversations = [conv_1]
+
+        # init bot
+        bot = Bot(model)
+
+        # init Frame
+        root = tk.Tk()
+        frame = GUI(root, active_conversation, conversations, bot=bot)
+
+        root.mainloop()

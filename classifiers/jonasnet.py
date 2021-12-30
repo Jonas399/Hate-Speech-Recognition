@@ -10,77 +10,133 @@ import tensorflow.keras as keras
 import tensorflow as tf
 import numpy as np
 
+from sklearn.preprocessing import LabelEncoder
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.utils import to_categorical
 
 class JonasNetClassifier:
 
-    def __init__(self, output_dir, input_shape,
-                 nb_labels, build=True, load_weights=False):
+    def __init__(self, model_dir, x_train, x_val, y_train, y_val, build=True):
         self.model = None
-        self.output_dir = '../assets/models/' + 'jonasnet/'
+        self.output_dir = model_dir + '/assets/models/jonasnet/'
 
-        if build == True:
-            self.model = self.build_model(input_shape, nb_labels)
+        self.x_train = x_train
+        self.x_val = x_val
+        self.y_train = y_train
+        self.y_val = y_val
+        self.tokenizer = self._create_tokenizer(x_train)
+
+        self._build_model()
+
+        print('------------------------------------------------')
+        print('Build == ', build)
+        print('------------------------------------------------')
+
+        if build == False:
+            print('------------------------------------------------')
+            print('Loading weights')
+            print('------------------------------------------------')
+            self.model.load_weights(self.output_dir + 'model_init.hdf5')
+        else:
+            print('------------------------------------------------')
+            print('Model training')
+            print('------------------------------------------------')
+            self.model.fit()
             self.model.save_weights(self.output_dir + 'model_init.hdf5')
+            print('Model succesfully trained')
+        
 
 
-    def build_model(self, input_shape, nb_labels):
+    def _build_model(self):
+
+        print('Model is getting build.')
 
         self.model = keras.Sequential()
 
-        self.model.add(keras.layers.Embedding(nb_labels, 16))
-        self.model.add(keras.layers.Conv1D(128, 5, activation='relu'))
-        self.model.add(keras.layers.GlobalAveragePooling1D())
-        self.model.add(keras.layers.Dropout(0.5))
-        self.model.add(keras.layers.Dense(16, activation="relu"))
-        self.model.add(keras.layers.Dense(16, activation="relu"))
-        self.model.add(keras.layers.Dense(16, activation="relu"))
-        self.model.add(keras.layers.Dense(16, activation="relu"))
+        self.model.add(keras.layers.Embedding(input_dim = (len(self.tokenizer.word_counts) + 1), output_dim = 256, input_length = 27))
+        self.model.add(keras.layers.Dropout(0.7))
+        self.model.add(keras.layers.Dense(256, activation='relu'))
+        self.model.add(keras.layers.Dense(128, activation='relu'))
+        self.model.add(keras.layers.Dense(64, activation='relu'))
+        self.model.add(keras.layers.Flatten())
+        self.model.add(keras.layers.Dense(3, activation='softmax'))
 
-        self.model.add(keras.layers.Dense(1, activation = "sigmoid"))
+        self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
-        self.model.compile(optimizer="adam", loss=tf.keras.losses.CategoricalCrossentropy(), metrics=["accuracy"])
-
-
-        # ist nur beispielhaft also nicht angepasst & debugged
-
+        earlyStop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
+            patience=5, restore_best_weights=True)
+        reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', 
+            patience = 4, factor=0.7)
 
 
+        file_path = self.output_dir+'best_model.hdf5'
+
+        model_checkpoint = keras.callbacks.ModelCheckpoint(filepath=file_path, monitor='loss', 
+            save_best_only=True)
+
+        self.callbacks = [reduceLR, earlyStop, model_checkpoint]
 
 
-    def fit(self, x_train, y_train, x_val, y_val):
+    def fit(self):
 
-        batch_size = 16
-        nb_epochs = 10
+        print('Model is getting fitted.')
 
-        mini_batch_size = int(min(x_train.shape[0]/10, batch_size))
+        train_tweet = self.x_train
+        test_tweet = self.x_val
 
-        hist = self.model.fit(x_train,
-                              y_train,
-                              batch_size=mini_batch_size,
-                              verbose=False,
-                              validatioon_data=(x_val, y_val))
+        train_tweet = self.tokenizer.texts_to_sequences(train_tweet)
+        test_tweet = self.tokenizer.texts_to_sequences(test_tweet)
+
+        #Not every Tweet has the same legnth. The longest Tweet defines the size of the dataframe. 
+        #Every Tweet, which is shorter, gets paddings in the empty cells
+        train_tweet = pad_sequences(train_tweet, maxlen=27)
+        test_tweet = pad_sequences(test_tweet, maxlen=27)
+
+        encoder = LabelEncoder()
+
+        y_train_categorical = encoder.fit_transform(self.y_train)
+        y_train_categorical = to_categorical(self.y_train) 
+
+        y_test_categorical = encoder.fit_transform(self.y_val)
+        y_test_categorical = to_categorical(self.y_val) 
+
+        nb_epochs = 50
+
+        self.hist = self.model.fit(
+            train_tweet,
+            y_train_categorical,
+            validation_data=(test_tweet,y_test_categorical),
+            epochs=nb_epochs,
+            shuffle=True,
+            callbacks=self.callbacks)
 
         self.model.save(self.output_dir + 'last_model.hdf5')
 
         self.model = keras.models.load_model(self.output_dir + 'best_model.hdf5')
 
-        y_predict = self.mode.validate(x_val)
-        y_predict = np.argmax(y_predict, axis=1) # conversion to integer (from binary)
-
-        # Ergebnisse y_predict können dann gesaved werden etc.
-
         keras.backend.clear_session()
 
 
+    def _create_tokenizer(self, x_train):
+        tokenizer = Tokenizer(lower=False)
+        tokenizer.fit_on_texts(x_train)
+        return tokenizer
 
-    def validate(self, x_train, y_train, x_val, y_val):
-        pass # ...
-
-
-    def predict(self, x_predict, y_predict):
-
+    def predict(self, tweet):
+        
         model_path = self.output_dir + 'best_model.hdf5'
         self.model = keras.models.load_model(model_path)
 
-        y_predict = self.model.predict(x_predict)
-        return y_predict
+        sequenced_tweet = self.tokenizer.texts_to_sequences(np.array([tweet]))
+        # print('sequenced ', sequenced_tweet)
+
+        tokenized_tweet = pad_sequences(sequenced_tweet, maxlen=27)
+        # print('tokenized shape ', tokenized_tweet.shape)
+        # print('tokenized ', tokenized_tweet)
+
+        y_predict = self.model.predict(tokenized_tweet)
+        # print('y_predict shape ', y_predict.shape)
+        # print('y_predict ', y_predict)
+
+        return y_predict[0]
