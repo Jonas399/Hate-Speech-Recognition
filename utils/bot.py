@@ -209,7 +209,7 @@ class Bot:
         if self.examine_message:
             return 'message_text'
 
-        if any(pattern in casted_content for pattern in GREETINGS_PATTERNS):
+        if any(pattern in casted_content for pattern in GREETINGS_PATTERNS) and not 'https' in casted_content:
             intent = 'greeting'
         elif 'action' in casted_content:
             intent = 'action'
