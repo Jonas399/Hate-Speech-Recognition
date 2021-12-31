@@ -29,6 +29,17 @@ if __name__ == '__main__':
         data_dir = os_dir + '/data/labeled_data.csv'
         x_train, x_val, y_train, y_val = prepare_model_data(data_dir)
 
+        print('-----x_train------')
+        print(x_train.shape)
+        print('-----x_val------')
+        print(x_val.shape)
+        print('-----x_train------')
+        print(x_train.shape)
+        print('----y_train-------')
+        print(y_train.shape)
+        print('-----y_val------')
+        print(y_val.shape)
+
         model = JonasNetClassifier(os_dir, x_train, x_val, y_train, y_val, build=build)
     else:
         # init conversations
@@ -38,6 +49,17 @@ if __name__ == '__main__':
         os_dir = os.path.abspath(os.curdir)
         data_dir = os_dir + '/data/labeled_data.csv'
         x_train, x_val, y_train, y_val = prepare_model_data(data_dir)
+
+        print('-----x_train------')
+        print(x_train)
+        print('-----x_val------')
+        print(x_val)
+        print('-----x_train------')
+        print(x_train)
+        print('----y_train-------')
+        print(y_train)
+        print('-----y_val------')
+        print(y_val)
 
         model = JonasNetClassifier(os_dir, x_train, x_val, y_train, y_val, build=build)
 

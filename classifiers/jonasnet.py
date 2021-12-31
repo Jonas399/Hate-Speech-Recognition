@@ -11,9 +11,12 @@ import tensorflow as tf
 import numpy as np
 
 from sklearn.preprocessing import LabelEncoder
+from sklearn.utils import class_weight
 from tensorflow.keras.preprocessing.text import Tokenizer
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.utils import to_categorical
+
+from utils.preprocessing import prepare_tweet
 
 class JonasNetClassifier:
 
@@ -42,7 +45,7 @@ class JonasNetClassifier:
             print('------------------------------------------------')
             print('Model training')
             print('------------------------------------------------')
-            self.model.fit()
+            self.fit()
             self.model.save_weights(self.output_dir + 'model_init.hdf5')
             print('Model succesfully trained')
         
@@ -54,20 +57,20 @@ class JonasNetClassifier:
 
         self.model = keras.Sequential()
 
-        self.model.add(keras.layers.Embedding(input_dim = (len(self.tokenizer.word_counts) + 1), output_dim = 256, input_length = 27))
+        self.model.add(keras.layers.Embedding(input_dim = (len(self.tokenizer.word_counts) + 1), output_dim = 128, input_length = 27))
+        self.model.add(keras.layers.Conv1D(128, 5, activation='relu'))
+        self.model.add(keras.layers.GlobalAveragePooling1D())
         self.model.add(keras.layers.Dropout(0.7))
-        self.model.add(keras.layers.Dense(256, activation='relu'))
         self.model.add(keras.layers.Dense(128, activation='relu'))
         self.model.add(keras.layers.Dense(64, activation='relu'))
         self.model.add(keras.layers.Flatten())
         self.model.add(keras.layers.Dense(3, activation='softmax'))
-
         self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
         earlyStop = tf.keras.callbacks.EarlyStopping(monitor='val_loss', 
             patience=5, restore_best_weights=True)
-        reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', 
-            patience = 4, factor=0.7)
+        # reduceLR = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', 
+        #     patience = 4, factor=0.7)
 
 
         file_path = self.output_dir+'best_model.hdf5'
@@ -75,7 +78,7 @@ class JonasNetClassifier:
         model_checkpoint = keras.callbacks.ModelCheckpoint(filepath=file_path, monitor='loss', 
             save_best_only=True)
 
-        self.callbacks = [reduceLR, earlyStop, model_checkpoint]
+        self.callbacks = [earlyStop, model_checkpoint]
 
 
     def fit(self):
@@ -100,6 +103,16 @@ class JonasNetClassifier:
 
         y_test_categorical = encoder.fit_transform(self.y_val)
         y_test_categorical = to_categorical(self.y_val) 
+
+        custom_weights = class_weight.compute_class_weight(class_weight = 'balanced', classes=np.unique(self.y_train), y=self.y_train)
+
+        def custom_weights_to_dictionary(weights):
+            dic = {}
+            for i in range(len(weights)):
+                dic[i] = weights[i]
+            return dic
+
+        weights = custom_weights_to_dictionary(custom_weights)
 
         nb_epochs = 50
 
@@ -128,7 +141,9 @@ class JonasNetClassifier:
         model_path = self.output_dir + 'best_model.hdf5'
         self.model = keras.models.load_model(model_path)
 
-        sequenced_tweet = self.tokenizer.texts_to_sequences(np.array([tweet]))
+        prepared_tweet = prepare_tweet(tweet)
+
+        sequenced_tweet = self.tokenizer.texts_to_sequences(np.array([prepared_tweet]))
         # print('sequenced ', sequenced_tweet)
 
         tokenized_tweet = pad_sequences(sequenced_tweet, maxlen=27)
