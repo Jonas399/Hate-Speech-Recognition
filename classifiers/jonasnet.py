@@ -78,7 +78,11 @@ class JonasNetClassifier:
         model_checkpoint = keras.callbacks.ModelCheckpoint(filepath=file_path, monitor='loss', 
             save_best_only=True)
 
-        self.callbacks = [earlyStop, model_checkpoint]
+        self.callbacks = [
+            # reduceLR,
+            earlyStop, 
+            model_checkpoint
+        ]
 
 
     def fit(self):
@@ -119,8 +123,9 @@ class JonasNetClassifier:
         self.hist = self.model.fit(
             train_tweet,
             y_train_categorical,
-            validation_data=(test_tweet,y_test_categorical),
-            epochs=nb_epochs,
+            validation_split=0.2,
+            class_weight=weights,
+            epochs= nb_epochs,
             shuffle=True,
             callbacks=self.callbacks)
 
